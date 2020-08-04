@@ -37,9 +37,13 @@ def eval_log_slater(xs):
 def eval_vandermonde(xs):
     product_of_wavefunctions = xs.prod(dim=-1)
     total = 1.0
-    for i in range(len(xs.shape[-1])):
-        for j in range(i+1, len(xs.shape[-1])):
-            total = total * torch.log(product_of_wavefunctions[..., i] - product_of_wavefunctions[..., j])
+    if product_of_wavefunctions.shape[-1] == 1:
+        # if only 1 basis func, just return it
+        squeezed = product_of_wavefunctions.squeeze(dim=-1)
+        return squeezed
+    for i in range(product_of_wavefunctions.shape[-1]):
+        for j in range(i+1, product_of_wavefunctions.shape[-1]):
+            total = total * (product_of_wavefunctions[..., i] - product_of_wavefunctions[..., j])
     return total
 
 def eval_log_vandermonde(xs):
@@ -49,11 +53,18 @@ def eval_log_vandermonde(xs):
     #                                   torch.triu(torch.ones(self.dim, self.dim), diagonal=1).nonzero(as_tuple=True)[
     #                                       1]])), -1) )
     total = 0.0
-    for i in range(len(xs.shape[-1])):
-        for j in range(i+1, len(xs.shape[-1])):
-            total = total + torch.log(product_of_wavefunctions[..., i] - product_of_wavefunctions[..., j])
+    sign = 1.0
+    if product_of_wavefunctions.shape[-1] == 1:
+        # if only 1 basis func, just return it
+        squeezed = product_of_wavefunctions.squeeze(dim=-1)
+        return torch.sign(squeezed), torch.log(torch.abs(squeezed))
+    for i in range(product_of_wavefunctions.shape[-1]):
+        for j in range(i+1, product_of_wavefunctions.shape[-1]):
+            diff = product_of_wavefunctions[..., i] - product_of_wavefunctions[..., j]
+            total = total + torch.log(torch.abs(diff))
+            sign = sign * torch.sign(diff)
 
-    return total
+    return sign, total
 
 
 class PauliNet(WaveFunction):
@@ -438,15 +449,19 @@ class PauliNet(WaveFunction):
             sign = sign.detach()
         else:
             if self.return_log:
-                sign_up, det_up = eval_log_slater(det_up)
-                sign_down, det_down = eval_log_slater(det_down)
+                # sign_up, det_up = eval_log_slater(det_up)
+                sign_up, det_up = eval_log_vandermonde(det_up)
+                # sign_down, det_down = eval_log_slater(det_down)
+                sign_down, det_down = eval_log_vandermonde(det_down)
                 xs = det_up + det_down
                 xs_shift = xs.flatten(start_dim=1).max(dim=-1).values
                 # the exp-normalize trick, to avoid over/underflow of the exponential
                 xs = sign_up * sign_down * torch.exp(xs - xs_shift[:, None, None])
             else:
-                det_up = debug['det_up'] = eval_slater(det_up)
-                det_down = debug['det_down'] = eval_slater(det_down)
+                # det_up = debug['det_up'] = eval_slater(det_up)
+                # det_down = debug['det_down'] = eval_slater(det_down)
+                det_up = debug['det_up'] = eval_vandermonde(det_up)
+                det_down = debug['det_down'] = eval_vandermonde(det_down)
                 xs = det_up * det_down
             psi = self.conf_coeff(xs).squeeze(dim=-1).mean(dim=-1)
             if self.return_log:
