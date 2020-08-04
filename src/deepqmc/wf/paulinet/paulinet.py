@@ -34,6 +34,27 @@ def eval_log_slater(xs):
         return xs.new_ones(xs.shape[:-2]), xs.new_zeros(xs.shape[:-2])
     return xs.contiguous().slogdet()
 
+def eval_vandermonde(xs):
+    product_of_wavefunctions = xs.prod(dim=-1)
+    total = 1.0
+    for i in range(len(xs.shape[-1])):
+        for j in range(i+1, len(xs.shape[-1])):
+            total = total * torch.log(product_of_wavefunctions[..., i] - product_of_wavefunctions[..., j])
+    return total
+
+def eval_log_vandermonde(xs):
+    product_of_wavefunctions = xs.prod(dim=-1)
+    # + torch.sum(torch.log(torch.abs(a[...,
+    #                                   torch.triu(torch.ones(self.dim, self.dim), diagonal=1).nonzero(as_tuple=True)[0],
+    #                                   torch.triu(torch.ones(self.dim, self.dim), diagonal=1).nonzero(as_tuple=True)[
+    #                                       1]])), -1) )
+    total = 0.0
+    for i in range(len(xs.shape[-1])):
+        for j in range(i+1, len(xs.shape[-1])):
+            total = total + torch.log(product_of_wavefunctions[..., i] - product_of_wavefunctions[..., j])
+
+    return total
+
 
 class PauliNet(WaveFunction):
     r"""Implements the PauliNet ansatz from [Hermann19]_.
