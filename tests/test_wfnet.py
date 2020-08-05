@@ -116,6 +116,21 @@ def test_antisymmetry_trained(wf, rs):
     )
 
 
+def test_antisymmetry_trained(wf, rs):
+    wf.use_vandermonde = True
+    sampler = LangevinSampler(wf, torch.rand_like(rs), tau=0.1)
+    fit_wf(
+        wf,
+        LossEnergy(),
+        torch.optim.Adam(wf.parameters(), lr=1e-2),
+        sampler,
+        range(10),
+    )
+    assert_alltrue_named(
+        (name, torch.allclose(wf(rs[:, [0, 2, 1]])[i], (-1) ** i * wf(rs)[i]))
+        for i, name in enumerate(['log(abs(psi))', 'sign(psi)'])
+    )
+
 def test_backprop(wf, rs):
     wf(rs)[0].sum().backward()
     assert_alltrue_named(
