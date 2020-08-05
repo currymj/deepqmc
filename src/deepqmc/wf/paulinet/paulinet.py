@@ -146,7 +146,7 @@ class PauliNet(WaveFunction):
         mo_factory=None,
         return_log=True,
         use_sloglindet='training',
-        use_vandermonde=True,
+        use_vandermonde=False,
         *,
         cusp_correction=False,
         cusp_electrons=False,

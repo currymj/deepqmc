@@ -93,6 +93,13 @@ def test_antisymmetry(wf, rs):
         for i, name in enumerate(['log(abs(psi))', 'sign(psi)'])
     )
 
+def test_vandermonde_antisymmetry(wf, rs):
+    wf.use_vandermonde = True
+    assert_alltrue_named(
+        (name, torch.allclose(wf(rs[:, [0, 2, 1]])[i], (-1) ** i * wf(rs)[i]))
+        for i, name in enumerate(['log(abs(psi))', 'sign(psi)'])
+    )
+
 
 def test_antisymmetry_trained(wf, rs):
     sampler = LangevinSampler(wf, torch.rand_like(rs), tau=0.1)
