@@ -35,6 +35,7 @@ def eval_log_slater(xs):
     return xs.contiguous().slogdet()
 
 def eval_vandermonde(xs):
+    print('non-log vandermonde is evaluated')
     product_of_wavefunctions = xs.prod(dim=-1)
     total = 1.0
     if product_of_wavefunctions.shape[-1] == 1:
@@ -43,7 +44,7 @@ def eval_vandermonde(xs):
         return squeezed
     for i in range(product_of_wavefunctions.shape[-1]):
         for j in range(i+1, product_of_wavefunctions.shape[-1]):
-            total = total * (product_of_wavefunctions[..., i] - product_of_wavefunctions[..., j])
+            total = total * (product_of_wavefunctions[..., j] - product_of_wavefunctions[..., i])
     return total
 
 def eval_log_vandermonde(xs):
@@ -58,9 +59,10 @@ def eval_log_vandermonde(xs):
         # if only 1 basis func, just return it
         squeezed = product_of_wavefunctions.squeeze(dim=-1)
         return torch.sign(squeezed), torch.log(torch.abs(squeezed))
+    # prod_all_sign = torch.sign(product_all_wavefunctions)
     for i in range(product_of_wavefunctions.shape[-1]):
         for j in range(i+1, product_of_wavefunctions.shape[-1]):
-            diff = product_of_wavefunctions[..., i] - product_of_wavefunctions[..., j]
+            diff = product_of_wavefunctions[..., j] - product_of_wavefunctions[..., i]
             total = total + torch.log(torch.abs(diff))
             sign = sign * torch.sign(diff)
 
@@ -144,6 +146,7 @@ class PauliNet(WaveFunction):
         mo_factory=None,
         return_log=True,
         use_sloglindet='training',
+        use_vandermonde=True,
         *,
         cusp_correction=False,
         cusp_electrons=False,
@@ -222,10 +225,16 @@ class PauliNet(WaveFunction):
             self.requires_grad_embeddings_(False)
         self.n_determinants = len(self.confs) * backflow_channels
         self.n_backflows = 0 if not self.backflow else backflow_spec[1]
+        self.use_vandermonde = use_vandermonde
         if n_up <= 1 or n_down <= 1:
             self.use_sloglindet = 'never'
             log.warning(
                 'Setting use_sloglindet to "never" as not implemented for n=0 and n=1.'
+            )
+        if self.use_vandermonde:
+            self.use_sloglindet = 'never'
+            log.warning(
+                'Setting use_sloglindet to "never" as incompatible with Vandermonde determinant.'
             )
         # TODO implement sloglindet for special cases n=0 and n=1
         else:
@@ -449,20 +458,29 @@ class PauliNet(WaveFunction):
             sign = sign.detach()
         else:
             if self.return_log:
-                # sign_up, det_up = eval_log_slater(det_up)
-                sign_up, det_up = eval_log_vandermonde(det_up)
-                # sign_down, det_down = eval_log_slater(det_down)
-                sign_down, det_down = eval_log_vandermonde(det_down)
-                xs = det_up + det_down
+                if self.use_vandermonde:
+                    sign_up, det_up = eval_log_vandermonde(det_up)
+                    sign_down, det_down = eval_log_vandermonde(det_down)
+                    xs = det_up + det_down
+                else:
+                    sign_up, det_up = eval_log_slater(det_up)
+                    sign_down, det_down = eval_log_slater(det_down)
+                    xs = det_up + det_down
+
+                # premultiply by diagonal to ensure cusps? make sure antisymmetry is maintained!
                 xs_shift = xs.flatten(start_dim=1).max(dim=-1).values
+
                 # the exp-normalize trick, to avoid over/underflow of the exponential
                 xs = sign_up * sign_down * torch.exp(xs - xs_shift[:, None, None])
             else:
-                # det_up = debug['det_up'] = eval_slater(det_up)
-                # det_down = debug['det_down'] = eval_slater(det_down)
-                det_up = debug['det_up'] = eval_vandermonde(det_up)
-                det_down = debug['det_down'] = eval_vandermonde(det_down)
-                xs = det_up * det_down
+                if self.use_vandermonde:
+                    det_up = debug['det_up'] = eval_vandermonde(det_up)
+                    det_down = debug['det_down'] = eval_vandermonde(det_down)
+                    xs = det_up * det_down
+                else:
+                    det_up = debug['det_up'] = eval_slater(det_up)
+                    det_down = debug['det_down'] = eval_slater(det_down)
+                    xs = det_up * det_down
             psi = self.conf_coeff(xs).squeeze(dim=-1).mean(dim=-1)
             if self.return_log:
                 psi, sign = psi.abs().log() + xs_shift, psi.sign().detach()
