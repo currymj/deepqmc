@@ -116,7 +116,7 @@ def test_antisymmetry_trained(wf, rs):
     )
 
 
-def test_antisymmetry_trained(wf, rs):
+def test_antisymmetry_trained_vandermonde(wf, rs):
     wf.use_vandermonde = True
     sampler = LangevinSampler(wf, torch.rand_like(rs), tau=0.1)
     fit_wf(
