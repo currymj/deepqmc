@@ -428,6 +428,8 @@ class PauliNet(WaveFunction):
             xs = self.mo(diffs_nuc, edges_nuc, debug=debug)
         # get orbitals as [bs, 1, i, mu]
         xs = debug['slaters'] = xs.view(batch_dim, 1, n_elec, -1)
+        # this should be a product of one orbital evaluated on each electron.
+        single_orbital = xs[..., 0].prod(dim=-1).squeeze(dim=-1)
         if self.backflow:
             with debug.cd('backflow'):
                 fs = self.backflow(*edges, debug=debug)  # [bs, q, i, mu/nu]
@@ -494,11 +496,23 @@ class PauliNet(WaveFunction):
             cusp_anti = self.cusp_anti(
                 dists_elec[:, : self.n_up, self.n_up :].flatten(start_dim=1)
             )
-            psi = (
-                psi + cusp_same + cusp_anti
-                if self.return_log
-                else psi * torch.exp(cusp_same + cusp_anti)
-            )
+            if self.use_vandermonde:
+                # here we multiply the final result by the single orbital
+                psi = (
+                    psi + cusp_same + cusp_anti + torch.log(torch.abs(single_orbital))
+                    if self.return_log
+                    else psi * torch.exp(cusp_same + cusp_anti) * single_orbital
+                )
+                if not self.return_log:
+                    print('it gets called without log')
+                else:
+                    sign = sign * torch.sign(single_orbital)
+            else:
+                psi = (
+                    psi + cusp_same + cusp_anti
+                    if self.return_log
+                    else psi * torch.exp(cusp_same + cusp_anti)
+                )
         if self.jastrow:
             with debug.cd('jastrow'):
                 J = self.jastrow(*edges, debug=debug)
