@@ -127,6 +127,7 @@ def local_energy(
     if torch.isnan(quantum_force).any():
         raise NanError(rs)
     if torch.isnan(lap_log_psis).any():
+        print(rs[torch.isnan(lap_log_psis),:,:])
         raise NanError(rs)
     Es_loc = (
         -0.5 * (lap_log_psis + (quantum_force ** 2).sum(dim=(-2, -1)))
