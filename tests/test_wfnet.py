@@ -27,6 +27,10 @@ def assert_alltrue_named(items):
 def rs():
     return torch.randn(5, 3, 3)
 
+@pytest.fixture
+def rs_be():
+    return torch.randn(5,4,3)
+
 
 @pytest.fixture
 def mol():
@@ -78,6 +82,30 @@ def wf(net_factory, mol):
             }
         )
     return net_factory(*args, **kwargs)
+
+@pytest.fixture
+def wf_be(net_factory):
+    return PauliNet.from_hf(Molecule.from_name('Be'))
+
+
+def test_boundary(wf_be, rs_be):
+    rs_be[:,0,0] = 20.0
+    output, signs = wf_be(rs_be)
+    assert((torch.exp(output) <= 1e-8).all())
+    rs_be[:,0,0] = -20.0
+    output, signs = wf_be(rs_be)
+    assert((torch.exp(output) <= 1e-8).all())
+
+
+@pytest.mark.xfail()
+def test_boundary_vandermonde(wf_be, rs_be):
+    wf_be.use_vandermonde = True
+    rs_be[:,0,0] = 20.0
+    output, signs = wf_be(rs_be)
+    assert((torch.exp(output) <= 1e-8).all())
+    rs_be[:,0,0] = -20.0
+    output, signs = wf_be(rs_be)
+    assert((torch.exp(output) <= 1e-8).all())
 
 
 def test_batching(wf, rs):
