@@ -7,9 +7,11 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
+import logging
 
 __all__ = ()
 
+log = logging.getLogger(__name__)
 DNN_NAMED_MODULES = True
 
 
@@ -100,6 +102,40 @@ def get_log_dnn(start_dim, end_dim, activation_factory, last_bias=False, *, n_la
     qs = [k / n_layers for k in range(n_layers + 1)]
     dims = [int(np.round(start_dim ** (1 - q) * end_dim ** q)) for q in qs]
     return get_custom_dnn(dims, activation_factory, last_bias=last_bias)
+
+
+class SqueezeUnsqueeze(nn.Module):
+    def __init__(self, net):
+        super(SqueezeUnsqueeze, self).__init__()
+        self.net = net
+
+    def forward(self, x):
+        x = x.unsqueeze(dim=-2)
+        x = self.net(x)
+        x = x.squeeze(dim=-2)
+        return x
+
+
+def get_cnn(start_dim, end_dim, activation_factory, last_bias=False, kernel_size=16):
+    assert start_dim == 128, \
+        "right now this assumes an embedding dim of 128. can't guarantee dimensions with padding, pooling will work out otherwise. also, only call this for backflow and jastrow nets."
+
+    assert end_dim == 1 or end_dim == 2, "end dim of only 1 or two for now"
+
+    layers = []
+
+    curr_layer_dim = start_dim
+
+    i = 1
+    while curr_layer_dim > end_dim:
+        layers.append(
+            (f'conv{i}', nn.Conv1d(in_channels=1, out_channels=1, kernel_size=kernel_size, padding=kernel_size // 2)))
+        layers.append((f'pool{i}', nn.MaxPool1d(kernel_size=2)))
+        layers.append((f'activation{i}', activation_factory()))
+        i += 1
+        curr_layer_dim /= 2
+
+    return SqueezeUnsqueeze(nn.Sequential(OrderedDict(layers)))
 
 
 def get_custom_dnn(dims, activation_factory, last_bias=False):

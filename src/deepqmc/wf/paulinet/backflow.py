@@ -2,6 +2,7 @@ import torch
 from torch import nn
 
 from deepqmc.torchext import SSP, get_log_dnn, idx_perm
+from deepqmc.torchext.utils import get_cnn
 from deepqmc.utils import NULL_DEBUG
 
 __all__ = ()
@@ -13,14 +14,21 @@ def backflow_cutoff(r, L=0.5):
 
 
 class Backflow(nn.Module):
-    def __init__(self, mol, embedding_dim, subnets_factory=None):
+    def __init__(self, mol, embedding_dim, subnets_factory=None, use_cnn=True):
         if not subnets_factory:
 
-            def subnets_factory(embedding_dim):
-                return (
-                    get_log_dnn(embedding_dim, 1, SSP, n_layers=3),
-                    get_log_dnn(embedding_dim, len(mol), SSP, n_layers=3),
-                )
+            if use_cnn:
+                def subnets_factory(embedding_dim):
+                    return (
+                        get_cnn(embedding_dim, 1, SSP),
+                        get_cnn(embedding_dim, len(mol), SSP),
+                    )
+            else:
+                def subnets_factory(embedding_dim):
+                    return (
+                        get_log_dnn(embedding_dim, 1, SSP, n_layers=3),
+                        get_log_dnn(embedding_dim, len(mol), SSP, n_layers=3),
+                    )
 
         super().__init__()
         self.bf_elec, self.bf_nuc = subnets_factory(embedding_dim)
