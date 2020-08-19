@@ -14,6 +14,8 @@ DeepQMC implements variational quantum Monte Carlo for electrons in molecules, u
 
 - PauliNet [[video](https://youtu.be/_bdvpmleAgw)]: https://arxiv.org/abs/1909.08423
 
+- PauliNet with the Vandermonde determinant
+
 ## Installing
 
 Install and update using [Pip](https://pip.pypa.io/en/stable/quickstart/).
@@ -37,6 +39,23 @@ KeyboardInterrupt
 >>> evaluate(net)
 evaluating:  23%|▋  | 134/571 [01:08<03:44,  1.94it/s, E=-8.0455(32)]
 ```
+
+
+## A simple example with the Vandermonde determinant
+
+```python
+>>> from deepqmc import Molecule, evaluate, train
+>>> from deepqmc.wf import PauliNet
+>>> mol = Molecule.from_name('LiH')
+>>> net = PauliNet.from_hf(mol).cuda()
+>>> net.use_sloglindet = 'never'
+>>> net.use_vandermonde = True
+>>> train(net, learning_rate = 0.005)
+>>> evaluate(net)
+```
+
+
+
 
 ## Links
 

@@ -27,6 +27,10 @@ def assert_alltrue_named(items):
 def rs():
     return torch.randn(5, 3, 3)
 
+@pytest.fixture
+def rs_be():
+    return torch.randn(5,4,3)
+
 
 @pytest.fixture
 def mol():
@@ -79,6 +83,30 @@ def wf(net_factory, mol):
         )
     return net_factory(*args, **kwargs)
 
+@pytest.fixture
+def wf_be(net_factory):
+    return PauliNet.from_hf(Molecule.from_name('Be'))
+
+
+def test_boundary(wf_be, rs_be):
+    rs_be[:,0,0] = 20.0
+    output, signs = wf_be(rs_be)
+    assert((torch.exp(output) <= 1e-8).all())
+    rs_be[:,0,0] = -20.0
+    output, signs = wf_be(rs_be)
+    assert((torch.exp(output) <= 1e-8).all())
+
+
+@pytest.mark.xfail()
+def test_boundary_vandermonde(wf_be, rs_be):
+    wf_be.use_vandermonde = True
+    rs_be[:,0,0] = 20.0
+    output, signs = wf_be(rs_be)
+    assert((torch.exp(output) <= 1e-8).all())
+    rs_be[:,0,0] = -20.0
+    output, signs = wf_be(rs_be)
+    assert((torch.exp(output) <= 1e-8).all())
+
 
 def test_batching(wf, rs):
     assert_alltrue_named(
@@ -88,6 +116,13 @@ def test_batching(wf, rs):
 
 
 def test_antisymmetry(wf, rs):
+    assert_alltrue_named(
+        (name, torch.allclose(wf(rs[:, [0, 2, 1]])[i], (-1) ** i * wf(rs)[i]))
+        for i, name in enumerate(['log(abs(psi))', 'sign(psi)'])
+    )
+
+def test_vandermonde_antisymmetry(wf, rs):
+    wf.use_vandermonde = True
     assert_alltrue_named(
         (name, torch.allclose(wf(rs[:, [0, 2, 1]])[i], (-1) ** i * wf(rs)[i]))
         for i, name in enumerate(['log(abs(psi))', 'sign(psi)'])
@@ -108,6 +143,21 @@ def test_antisymmetry_trained(wf, rs):
         for i, name in enumerate(['log(abs(psi))', 'sign(psi)'])
     )
 
+
+def test_antisymmetry_trained_vandermonde(wf, rs):
+    wf.use_vandermonde = True
+    sampler = LangevinSampler(wf, torch.rand_like(rs), tau=0.1)
+    fit_wf(
+        wf,
+        LossEnergy(),
+        torch.optim.Adam(wf.parameters(), lr=1e-2),
+        sampler,
+        range(10),
+    )
+    assert_alltrue_named(
+        (name, torch.allclose(wf(rs[:, [0, 2, 1]])[i], (-1) ** i * wf(rs)[i]))
+        for i, name in enumerate(['log(abs(psi))', 'sign(psi)'])
+    )
 
 def test_backprop(wf, rs):
     wf(rs)[0].sum().backward()

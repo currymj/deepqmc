@@ -198,6 +198,8 @@ def fit_wf(  # noqa: C901
             torch.cat(xs) for xs in zip(*subbatches)
         )
         if torch.isnan(loss).any():
+            print('inf wavefunction values', rs_batch[torch.exp(log_psis*sign_psis) == float('inf')])
+            print('large log_ws', rs_batch[torch.exp(log_ws) == float('inf')])
             raise NanError(rs_batch)
         if any(
             torch.isnan(p.grad).any() for p in wf.parameters() if p.grad is not None
