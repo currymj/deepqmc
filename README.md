@@ -50,7 +50,7 @@ evaluating:  23%|▋  | 134/571 [01:08<03:44,  1.94it/s, E=-8.0455(32)]
 >>> net = PauliNet.from_hf(mol).cuda()
 >>> net.use_sloglindet = 'never'
 >>> net.use_vandermonde = True
->>> train(net)
+>>> train(net, learning_rate = 0.005)
 >>> evaluate(net)
 ```
 
